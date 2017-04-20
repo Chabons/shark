@@ -60,10 +60,10 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 	client_version = (update_type == 1 and [args['vod_version']] or (update_type == 2 and [args['res_version']] or [None]))[0]
 	update_version = (update_type == 1 and ['vod_update_version'] or (update_type == 2 and ['res_update_version'] or [None]))[0]
 	update_status = (update_type == 1 and ['vod_update_status'] or (update_type == 2 and ['res_update_status'] or [None]))[0]
-	if result == None or len(result) == 0 or result[0][5] == 0 or result[0][1] == client_version:
+	if result == None or len(result) == 0 or result[0][5] == '0' or result[0][1] == client_version:
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update %s" %(identity, result))
 		return
-	if args.has_key(update_version) and args[update_version] == result[0][1] and args[update_status] != 2 :
+	if args.has_key(update_version) and args[update_version] == result[0][1] and int(args[update_status]) != 2 :
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update %s" %(identity, result))
 	 	return
 	if time.time() - result[0][3] < (int)(config.get('notify_interval', 600)):
