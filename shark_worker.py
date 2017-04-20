@@ -74,17 +74,13 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update for over limit:%s  %s" %(identity, count[0][0], result))
 		return
 	
-	try:
-		ret_dict = {'cmd':'update', 'mid':result[0][0], 'target_version':result[0][1], 'update_url':result[0][2]}
-		ret_dict['time'] = int(time.time())
-		ret_dict['type'] = update_type
-		hash_str = "%s%s%s" %(ret_dict['cmd'], ret_dict['mid'], ret_dict['time'])
-		hash_str += r"to80Z4U5tm*$!0IC" 
-		ret_dict['signature'] = hashlib.sha1(hash_str).hexdigest()
-		ret_str = json.dumps(ret_dict)
-		worker.send_multipart([identity, ret_str])
-	except Exception, e:
-		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "Error:checkVodUpdate%s" %e)
+	ret_dict = {'cmd':'update', 'mid':result[0][0], 'target_version':result[0][1], 'update_url':result[0][2]}
+	ret_dict['time'] = int(time.time())
+	ret_dict['type'] = update_type
+	hash_str = "%s%s%s" %(ret_dict['cmd'], ret_dict['mid'], ret_dict['time'])
+	hash_str += r"to80Z4U5tm*$!0IC" 
+	ret_dict['signature'] = hashlib.sha1(hash_str).hexdigest()
+	heartReturn(identity, worker, ret_dict)
 	condition = "where mid = '%s'" %(args.get('mid', ''))
 	if not sqlmanager.updateTable(table_name, condition, notify_time = int(time.time())):
 		tprint('worker:%s update %s notify time error' %(multiprocessing.current_process().name), table_name)	
@@ -112,21 +108,12 @@ def heartDealHandler(worker, identity, args, config):
 		ret_dict['info_code'] = '10000'
 		ret_dict['status'] = 1
 		ret_dict['heart_interval'] = (int)(config.get("heart_interval", 120))
-		try:
-			ret_str = json.dumps(ret_dict)
-			worker.send_multipart([identity, ret_str])
-			tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "ret:%s" %ret_str)
-		except Exception, e:
-			tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "Error:heartDealHandler %s" %e)
 	else:
 		ret_dict['info_code'] = '10001'
 		ret_dict['status'] = 0
-		try:
-			ret_str = json.dumps(ret_dict)
-			worker.send_multipart([identity, ret_str])
-			tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "ret:%s" %ret_str)
-		except Exception, e:
-			tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "Error:heartDealHandler %s" %e)
+	heartReturn(identity, worker, ret_dict)
+	if not flag:
+		return
 	updateTheUpdateTable(args)
 	checkCliUpdate(worker, identity, args, config, 1)
 	checkCliUpdate(worker, identity, args, config, 2)
