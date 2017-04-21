@@ -118,18 +118,49 @@ def heartDealHandler(worker, identity, args, config):
 	checkCliUpdate(worker, identity, args, config, 1)
 	checkCliUpdate(worker, identity, args, config, 2)
 	
+def commandDealHandler(worker, args, identity):
+	if not isinstance(args, dict) or not args.has_key('admin_identity'):
+		tprint('worker:%s' %(multiprocessing.current_process().name), "cmd_ret(from %s):%s" %(identity, args), "Error:commandDealHandler error")
+		return
+	heartReturn(args['admin_identity'].encode('ascii'), worker, args)
 
-def msgDealHandler(worker, identity, args, config):
-	print "msgDealHandler"
+def clientMsgDealHandler(worker, identity, args, config):
 	if not isinstance(args, dict) or not args.has_key('cmd'):
 		return
 	for case in switch(args['cmd']):
 		if case('heart'):
 			heartDealHandler(worker, identity, args, config)
 			break
+		if case('execute'):
+			commandDealHandler(worker, args, identity)
+			break
 		if case(''):
 			tprint("Error cmd", args)
 
+def adminPushMsg(worker, args):
+	if not args.has_key('vod_identitys') or not isinstance(args['vod_identitys'], list):
+		print type(args['vod_identitys'])
+		return
+	ret_dict = args.copy()
+	del ret_dict['vod_identitys']
+	for identity in args['vod_identitys']:
+		heartReturn(identity.encode('ascii'), worker, ret_dict)
+	
+
+def adminMsgDealHandler(worker, identity, args):
+	if not isinstance(args, dict) or not args.has_key('cmd') or not args.has_key('vod_identitys'):
+		tprint('worker:%s' %(multiprocessing.current_process().name), "cmd_ret(from %s):%s" %(identity, args), "Error:adminMsgDealHandler params error")
+		return
+	for case in switch(args['cmd']):
+		if case('update'):
+			adminPushMsg(worker, args)	
+			break
+		if case('execute'):
+			adminPushMsg(worker, args)	
+			break
+		if case(''):
+			tprint("Error cmd", args)
+	
 def heartReturn(identity, worker, args):
 	if not isinstance(args, dict):
 		return
@@ -173,9 +204,10 @@ def workerHandler():
 			tprint("Error:%s" %e)
 			continue
 		if identity[:5] != "admin" and clientVerify(identity, worker):
-			msgDealHandler(worker, identity, msg, config_base)
+			clientMsgDealHandler(worker, identity, msg, config_base)
 		else:
-			pass
+			adminMsgDealHandler(worker, identity, msg)
+			
 	worker.close()
 	context.term()
 
