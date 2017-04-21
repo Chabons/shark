@@ -1,0 +1,3 @@
+[submodule "SqlManager"]
+	path = SqlManager
+	url = https://github.com/Dave-Xu/SqlManager.git

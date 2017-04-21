@@ -11,7 +11,7 @@ import os
 import threading
 import hashlib
 from switch import switch
-from SqlManager import SqlManager 
+from SqlManager.SqlManager import SqlManager 
 
 identitys = multiprocessing.Manager().dict()
 config_path = 'shark.ini'

@@ -1,1 +1,0 @@
-/home/xcy/workspace/SqlManager/SqlManager.py
