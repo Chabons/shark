@@ -60,6 +60,13 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 	client_version = (update_type == 1 and [args['vod_version']] or (update_type == 2 and [args['res_version']] or [None]))[0]
 	update_version = (update_type == 1 and ['vod_update_version'] or (update_type == 2 and ['res_update_version'] or [None]))[0]
 	update_status = (update_type == 1 and ['vod_update_status'] or (update_type == 2 and ['res_update_status'] or [None]))[0]
+
+	if result != None and len(result) > 0 and result[0][5] == '1' and result[0][1] == args.get(update_version, None) and int(args.get(update_status, 0)) >= 3:
+		condition = "where mid = '%s'" %(args.get('mid', ''))
+		if not sqlmanager.updateTable(table_name, condition, enable = 0, update_status = args[update_status]):
+			tprint('worker:%s update %s enable error' %(multiprocessing.current_process().name), table_name)
+		return
+
 	if result == None or len(result) == 0 or result[0][5] == '0' or result[0][1] == client_version:
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update %s" %(identity, result))
 		return
