@@ -61,6 +61,11 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 	update_version = (update_type == 1 and ['vod_update_version'] or (update_type == 2 and ['res_update_version'] or [None]))[0]
 	update_status = (update_type == 1 and ['vod_update_status'] or (update_type == 2 and ['res_update_status'] or [None]))[0]
 
+	if args.has_key(update_version) and args.has_key(update_status) and int(args[update_status]) != int(result[0][4]):
+		condition = "where mid = '%s' and target_version = '%s'" %(args.get('mid', ''), args[update_version])
+		if not sqlmanager.updateTable(table_name, condition, update_status = args[update_status]):
+			tprint('worker:%s update %s error' %(multiprocessing.current_process().name, table_name))	
+
 	if result != None and len(result) > 0 and result[0][5] == '1' and result[0][1] == args.get(update_version, None) and int(args.get(update_status, 0)) >= 3:
 		condition = "where mid = '%s'" %(args.get('mid', ''))
 		if not sqlmanager.updateTable(table_name, condition, enable = 0, update_status = args[update_status]):
@@ -68,10 +73,10 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 		return
 
 	if result == None or len(result) == 0 or result[0][5] == '0' or result[0][1] == client_version:
-		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update %s" %(identity, result))
+		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update1 %s" %(identity, result))
 		return
-	if args.has_key(update_version) and args[update_version] == result[0][1] and int(args[update_status]) != 2 :
-		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update %s" %(identity, result))
+	if args.has_key(update_version) and args[update_version] == result[0][1] and int(args[update_status]) != 2 and int(args[update_status]) != 0:
+		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update2 %s" %(identity, result))
 	 	return
 	if time.time() - result[0][3] < (int)(config.get('notify_interval', 600)):
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update for has notify %s" %(identity, result))
@@ -89,8 +94,8 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 	ret_dict['signature'] = hashlib.sha1(hash_str).hexdigest()
 	heartReturn(identity, worker, ret_dict)
 	condition = "where mid = '%s'" %(args.get('mid', ''))
-	if not sqlmanager.updateTable(table_name, condition, notify_time = int(time.time())):
-		tprint('worker:%s update %s notify time error' %(multiprocessing.current_process().name), table_name)	
+	if not sqlmanager.updateTable(table_name, condition, notify_time = int(time.time()), update_status = 1):
+		tprint('worker:%s update %s notify time error' %(multiprocessing.current_process().name), table_name)
 	
 
 def heartDealHandler(worker, identity, args, config):
@@ -121,9 +126,12 @@ def heartDealHandler(worker, identity, args, config):
 	heartReturn(identity, worker, ret_dict)
 	if not flag:
 		return
-	updateTheUpdateTable(args)
-	checkCliUpdate(worker, identity, args, config, 1)
-	checkCliUpdate(worker, identity, args, config, 2)
+	try:
+		checkCliUpdate(worker, identity, args, config, 1)
+		checkCliUpdate(worker, identity, args, config, 2)
+	except Exception, e:
+		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "Error:checkCliUpdate error %s" %e)
+		
 	
 def commandDealHandler(worker, args, identity):
 	if not isinstance(args, dict) or not args.has_key('admin_identity'):
