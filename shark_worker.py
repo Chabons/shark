@@ -16,7 +16,7 @@ from SqlManager.SqlManager import SqlManager
 identitys = multiprocessing.Manager().dict()
 config_path = 'shark.ini'
 workers = list()
-tb_tuple = ('TB_MACHINE_LOGIN','TB_VOD_UPDATE','TB_RES_UPDATE')
+tb_tuple = ('TB_MACHINE_LOGIN','shark_vodupdate','shark_resupdate', 'shark_vodpackages', 'shark_respackages')
 
 def tprint(*args):
 	if len(args) == 0 :
@@ -28,7 +28,6 @@ def tprint(*args):
 		sys.stdout.write("%s " %(arg))
 	sys.stdout.write("\n")
 	sys.stdout.flush()
-
 
 def readConfig(path, section):
 	cf = ConfigParser.ConfigParser()
@@ -42,11 +41,11 @@ def readConfig(path, section):
 def updateTheUpdateTable(args):
 	sqlmanager = SqlManager()
 	if args.has_key('vod_update_version') and args.has_key('vod_update_status'):
-		condition = "where mid = '%s' and target_version = '%s'" %(args.get('mid', ''), args['vod_update_version'])
+		condition = "where mid = '%s' and target_version_id = '%s'" %(args.get('mid', ''), args['vod_update_version'])
 		if not sqlmanager.updateTable(tb_tuple[1], condition, update_status = args['vod_update_status']):
 			tprint('worker:%s update vod_update_tb error' %(multiprocessing.current_process().name))	
 	if args.has_key('res_update_version') and args.has_key('res_update_status'):
-		condition = "where mid = '%s' and target_version = '%s'" %(args.get('mid', ''), args['res_update_version'])
+		condition = "where mid = '%s' and target_version_id = '%s'" %(args.get('mid', ''), args['res_update_version'])
 		if not sqlmanager.updateTable(tb_tuple[2], condition, update_status = args['res_update_status']):
 			tprint('worker:%s update res_update_tb error' %(multiprocessing.current_process().name))	
 
@@ -56,21 +55,22 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 		return
 	sqlmanager = SqlManager()
 	table_name =  (update_type == 1 and [tb_tuple[1]] or (update_type == 2 and [tb_tuple[2]] or [None]))[0]
-	result = sqlmanager.queryTable(sql = "select * from %s where mid = %s" %(table_name, args['mid']))
+	table_relate = (update_type == 1 and [tb_tuple[3]] or (update_type == 2 and [tb_tuple[4]] or [None]))[0]
+	result = sqlmanager.queryTable(sql = "select {0}.*, {1}.url from {0} left join {1} on {0}.target_version_id = {1}.name where mid = {2}".format(table_name, table_relate, args['mid']))
 	client_version = (update_type == 1 and [args['vod_version']] or (update_type == 2 and [args['res_version']] or [None]))[0]
 	update_version = (update_type == 1 and ['vod_update_version'] or (update_type == 2 and ['res_update_version'] or [None]))[0]
 	update_status = (update_type == 1 and ['vod_update_status'] or (update_type == 2 and ['res_update_status'] or [None]))[0]
 
-	if result == None or len(result) == 0 or result[0][5] == '0' or result[0][1] == client_version:
+	if result == None or len(result) == 0 or result[0][4] == '0' or result[0][1] == client_version:
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update1 %s" %(identity, result))
 		return
 
-	if args.has_key(update_version) and args.has_key(update_status) and int(args[update_status]) != int(result[0][4]):
-		condition = "where mid = '%s' and target_version = '%s'" %(args.get('mid', ''), args[update_version])
+	if args.has_key(update_version) and args.has_key(update_status) and int(args[update_status]) != int(result[0][3]):
+		condition = "where mid = '%s' and target_version_id = '%s'" %(args.get('mid', ''), args[update_version])
 		if not sqlmanager.updateTable(table_name, condition, update_status = args[update_status]):
 			tprint('worker:%s update %s error' %(multiprocessing.current_process().name, table_name))	
 
-	if result[0][5] == '1' and result[0][1] == args.get(update_version, None) and int(args.get(update_status, 0)) >= 3:
+	if result[0][4] == '1' and result[0][1] == args.get(update_version, None) and int(args.get(update_status, 0)) >= 3:
 		condition = "where mid = '%s'" %(args.get('mid', ''))
 		if not sqlmanager.updateTable(table_name, condition, enable = 0, update_status = args[update_status]):
 			tprint('worker:%s update %s enable error' %(multiprocessing.current_process().name), table_name)
@@ -79,7 +79,7 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 	if args.has_key(update_version) and args[update_version] == result[0][1] and int(args[update_status]) != 2 and int(args[update_status]) != 0:
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update2 %s" %(identity, result))
 	 	return
-	if time.time() - result[0][3] < (int)(config.get('notify_interval', 600)):
+	if time.time() - result[0][2] < (int)(config.get('notify_interval', 600)):
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update for has notify %s" %(identity, result))
 		return	
 	count = sqlmanager.queryTable(sql = "select count(*) from %s where update_status = 1" %(table_name))
@@ -87,7 +87,7 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update for over limit:%s  %s" %(identity, count[0][0], result))
 		return
 	
-	ret_dict = {'cmd':'update', 'mid':result[0][0], 'target_version':result[0][1], 'update_url':result[0][2]}
+	ret_dict = {'cmd':'update', 'mid':result[0][0], 'target_version':result[0][1], 'update_url':result[0][5]}
 	ret_dict['time'] = int(time.time())
 	ret_dict['type'] = update_type
 	hash_str = "%s%s%s" %(ret_dict['cmd'], ret_dict['mid'], ret_dict['time'])
@@ -98,6 +98,35 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 	if not sqlmanager.updateTable(table_name, condition, notify_time = int(time.time()), update_status = 1):
 		tprint('worker:%s update %s notify time error' %(multiprocessing.current_process().name), table_name)
 	
+#计算每月多少天
+def day_month(year, month):
+	if year < 0 or (month < 1 and month < 12):
+		return 0
+	months = (31,28,31,30,31,30,31,31,30,31,30,31)
+	if month != 2:
+		return months[month - 1]
+	else:
+		if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0:
+			return 29
+		else:
+			return 28
+
+#计算用户累计登入天数
+def countLoginDay(last_time,now_time,login_day):
+	st_last = time.localtime(last_time)
+	st_now = time.localtime(now_time)
+	month_day = day_month(st_last[0], st_last[1])
+	if st_last[0] == st_now[0] and st_last[1] == st_now[1] and st_last[2] == st_now[2]:
+		print "user login the same day"
+	elif st_last[0] == st_now[0] and st_last[1] == st_now[1] and st_last[2] + 1 == st_now[2]:
+		login_day += 1
+	elif st_last[0] == st_now[0] and st_last[1] + 1 == st_now[1] and st_last[2] == month_day and st_now[2] == 1:
+		login_day += 1
+	elif st_last[0] + 1 == st_now[0] and st_last[1] == 12 and st_now[1] == 1 and st_last[2] == month_day and st_now[2] == 1:
+		login_day += 1
+	else:
+		login_day = 1
+	return login_day
 
 def heartDealHandler(worker, identity, args, config):
 	if not isinstance(args, dict):
@@ -114,6 +143,8 @@ def heartDealHandler(worker, identity, args, config):
 		del insert_dict['device_id']
 		del insert_dict['control_id']
 		insert_dict['HEARTBEAT_TIME'] = int(time.time())
+		insert_dict['login_day'] = countLoginDay(int(result[0][9]), insert_dict['HEARTBEAT_TIME'],result[0][14])
+		print result[0][9], insert_dict['HEARTBEAT_TIME'], result[0][14], '-----------------------------', insert_dict['login_day']
 		flag = sqlmanager.updateTable(tb_tuple[0], condition, **insert_dict)
 
 	ret_dict = {'cmd':'heart_ret'}
@@ -132,7 +163,6 @@ def heartDealHandler(worker, identity, args, config):
 		checkCliUpdate(worker, identity, args, config, 2)
 	except Exception, e:
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "Error:checkCliUpdate error %s" %e)
-		
 	
 def commandDealHandler(worker, args, identity):
 	if not isinstance(args, dict) or not args.has_key('admin_identity'):
