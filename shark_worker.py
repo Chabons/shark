@@ -12,6 +12,7 @@ import threading
 import hashlib
 from switch import switch
 from SqlManager.SqlManager import SqlManager 
+from ipAddress import ipAddress
 
 identitys = multiprocessing.Manager().dict()
 config_path = 'shark.ini'
@@ -142,6 +143,7 @@ def heartDealHandler(worker, identity, args, config):
 		del insert_dict['hard_sn']
 		del insert_dict['device_id']
 		del insert_dict['control_id']
+		ipAddress(insert_dict['ip_outside'], insert_dict)
 		insert_dict['HEARTBEAT_TIME'] = int(time.time())
 		insert_dict['login_day'] = countLoginDay(int(result[0][9]), insert_dict['HEARTBEAT_TIME'],result[0][14])
 		print result[0][9], insert_dict['HEARTBEAT_TIME'], result[0][14], '-----------------------------', insert_dict['login_day']
@@ -274,7 +276,8 @@ def serverStartHandler():
 	config = readConfig(config_path, 'baseconf')
 	context = zmq.Context()
 	frontend = context.socket(zmq.ROUTER)
-	frontend.bind("tcp://*:5570")
+	frontend.bind("tcp://*:31000")
+#	frontend.bind("tcp://*:5570")
 	backend = context.socket(zmq.DEALER)
 	backend.bind("ipc://backend.ipc")
 	tprint("server started")
