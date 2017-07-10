@@ -63,31 +63,31 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 	update_status = (update_type == 1 and ['vod_update_status'] or (update_type == 2 and ['res_update_status'] or [None]))[0]
 
 	if result == None or len(result) == 0 or result[0][4] == '0' or result[0][1] == client_version:
-		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update1 %s" %(identity, result))
+		tprint('worker:%s' %(multiprocessing.current_process().name),"hard_sn:%s" %args['hard_sn'], "identity:%s  need not update1 %s" %(identity, result))
 		return
 
 	if args.has_key(update_version) and args.has_key(update_status) and int(args[update_status]) != int(result[0][3]):
 		condition = "where mid = '%s' and target_version_id = '%s'" %(args.get('mid', ''), args[update_version])
 		if not sqlmanager.updateTable(table_name, condition, update_status = args[update_status]):
-			tprint('worker:%s update %s error' %(multiprocessing.current_process().name, table_name))	
+			tprint('worker:%s update %s error' %(multiprocessing.current_process().name,"hard_sn:%s" %args['hard_sn'], table_name))	
 
 	if result[0][4] == '1' and result[0][1] == args.get(update_version, None) and int(args.get(update_status, 0)) >= 3:
 		condition = "where mid = '%s'" %(args.get('mid', ''))
 		if not sqlmanager.updateTable(table_name, condition, enable = 0, update_status = args[update_status]):
-			tprint('worker:%s update %s enable error' %(multiprocessing.current_process().name), table_name)
+			tprint('worker:%s update %s enable error' %(multiprocessing.current_process().name),"hard_sn:%s" %args['hard_sn'], table_name)
 		return
 
 	if args.has_key(update_version) and args[update_version] == result[0][1] and int(args[update_status]) != 2 and int(args[update_status]) != 0:
-		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update2 %s" %(identity, result))
+		tprint('worker:%s' %(multiprocessing.current_process().name),"hard_sn:%s" %args['hard_sn'], "identity:%s  need not update2 %s" %(identity, result))
 	 	return
 	if time.time() - result[0][2] < (int)(config.get('notify_interval', 600)):
-		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update for has notify %s" %(identity, result))
-		return	
+		tprint('worker:%s' %(multiprocessing.current_process().name), "hard_sn:%s" %args['hard_sn'], "identity:%s  need not update for has notify %s" %(identity, result))
+		return
 	count = sqlmanager.queryTable(sql = "select count(*) from %s where update_status = 1" %(table_name))
 	if count == None or len(count) == 0 or int(count[0][0]) > int(config.get('update_limit' ,4)):
 		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s  need not update for over limit:%s  %s" %(identity, count[0][0], result))
 		return
-	
+
 	ret_dict = {'cmd':'update', 'mid':result[0][0], 'target_version':result[0][1], 'update_url':result[0][5]}
 	ret_dict['time'] = int(time.time())
 	ret_dict['type'] = update_type
@@ -97,8 +97,8 @@ def checkCliUpdate(worker, identity, args, config, update_type):
 	heartReturn(identity, worker, ret_dict)
 	condition = "where mid = '%s'" %(args.get('mid', ''))
 	if not sqlmanager.updateTable(table_name, condition, notify_time = int(time.time()), update_status = 1):
-		tprint('worker:%s update %s notify time error' %(multiprocessing.current_process().name), table_name)
-	
+		tprint('worker:%s update %s notify time error' %(multiprocessing.current_process().name),"hard_sn:%s" %args['hard_sn'], table_name)
+
 #计算每月多少天
 def day_month(year, month):
 	if year < 0 or (month < 1 and month < 12):
@@ -130,45 +130,50 @@ def countLoginDay(last_time,now_time,login_day):
 	return login_day
 
 def heartDealHandler(worker, identity, args, config):
-	if not isinstance(args, dict):
-		return
-	sqlmanager = SqlManager()
-	condition = "where mid = '%s' and hard_sn = '%s' and device_id = '%s' and control_id = '%s'" %(args.get("mid", ''), args.get('hard_sn', ''), args.get('device_id', ''), args.get('control_id', ''))
-	result = sqlmanager.queryTable(sql = "select * from %s %s" %(tb_tuple[0], condition))
-	flag = False
-	if result != None and len(result) > 0 and identity == args.get('hard_sn', ''):
-		insert_dict = args.copy()
-		del insert_dict['mid']
-		del insert_dict['cmd']
-		del insert_dict['hard_sn']
-		del insert_dict['device_id']
-		del insert_dict['control_id']
-		ipAddress(insert_dict['ip_outside'], insert_dict)
-		insert_dict['HEARTBEAT_TIME'] = int(time.time())
-		insert_dict['login_day'] = countLoginDay(int(result[0][9]), insert_dict['HEARTBEAT_TIME'],result[0][14])
-		print result[0][9], insert_dict['HEARTBEAT_TIME'], result[0][14], '-----------------------------', insert_dict['login_day']
-		flag = sqlmanager.updateTable(tb_tuple[0], condition, **insert_dict)
+    if not isinstance(args, dict):
+        return
+    sqlmanager = SqlManager()
+    condition = "where mid = '%s' and hard_sn = '%s' and device_id = '%s' and control_id = '%s'" %(args.get("mid", ''), args.get('hard_sn', ''), args.get('device_id', ''), args.get('control_id', ''))
+    result = sqlmanager.queryTable(sql = "select * from %s %s" %(tb_tuple[0], condition))
+    flag = False
+    if result != None and len(result) > 0 :
+        insert_dict = args.copy()
+        del insert_dict['mid']
+        del insert_dict['cmd']
+        del insert_dict['hard_sn']
+        del insert_dict['device_id']
+        del insert_dict['control_id']
+        ipAddress(insert_dict['ip_outside'], insert_dict)
+        insert_dict['HEARTBEAT_TIME'] = int(time.time())
+        insert_dict['login_day'] = countLoginDay(int(result[0][9]), insert_dict['HEARTBEAT_TIME'],result[0][14])
+        print result[0][9], insert_dict['HEARTBEAT_TIME'], result[0][14], '-----------------------------', insert_dict['login_day']
+        flag = sqlmanager.updateTable(tb_tuple[0], condition, **insert_dict)
+    ret_dict = {'cmd':'heart_ret'}
+    global identitys
+    if flag:
+        identitys[args['hard_sn']] = {"identity":identity, "time":(int)(time.time())}
+#        identitys[args['hard_sn']]["identity"] = identity
+#        identitys[args['hard_sn']]["time"] = (int)(time.time())
+        ret_dict['info_code'] = '10000'
+        ret_dict['status'] = 1
+        ret_dict['heart_interval'] = (int)(config.get("heart_interval", 120))
+    else:
+        if args.get('hard_sn', None):
+            del identitys[args['hard_sn']]
+        ret_dict['info_code'] = '10001'
+        ret_dict['status'] = 0
+    heartReturn(identity, worker, ret_dict)
+    if not flag:
+        return
+    try:
+        checkCliUpdate(worker, identity, args, config, 1)
+        checkCliUpdate(worker, identity, args, config, 2)
+    except Exception, e:
+        tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "hard_sn:%s" %args['hard_sn'], "Error:checkCliUpdate error %s" %e)
 
-	ret_dict = {'cmd':'heart_ret'}
-	if flag:
-		ret_dict['info_code'] = '10000'
-		ret_dict['status'] = 1
-		ret_dict['heart_interval'] = (int)(config.get("heart_interval", 120))
-	else:
-		ret_dict['info_code'] = '10001'
-		ret_dict['status'] = 0
-	heartReturn(identity, worker, ret_dict)
-	if not flag:
-		return
-	try:
-		checkCliUpdate(worker, identity, args, config, 1)
-		checkCliUpdate(worker, identity, args, config, 2)
-	except Exception, e:
-		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "Error:checkCliUpdate error %s" %e)
-	
 def commandDealHandler(worker, args, identity):
 	if not isinstance(args, dict) or not args.has_key('admin_identity'):
-		tprint('worker:%s' %(multiprocessing.current_process().name), "cmd_ret(from %s):%s" %(identity, args), "Error:commandDealHandler error")
+		tprint('worker:%s' %(multiprocessing.current_process().name),"hard_sn:%s" %args['hard_sn'], "cmd_ret(from %s):%s" %(identity, args), "Error:commandDealHandler error")
 		return
 	heartReturn(args['admin_identity'].encode('ascii'), worker, args)
 
@@ -186,14 +191,17 @@ def clientMsgDealHandler(worker, identity, args, config):
 			tprint("Error cmd", args)
 
 def adminPushMsg(worker, args):
-	if not args.has_key('vod_identitys') or not isinstance(args['vod_identitys'], list):
-		print type(args['vod_identitys'])
-		return
-	ret_dict = args.copy()
-	del ret_dict['vod_identitys']
-	for identity in args['vod_identitys']:
-		heartReturn(identity.encode('ascii'), worker, ret_dict)
-	
+    if not args.has_key('vod_identitys') or not isinstance(args['vod_identitys'], list):
+        print type(args['vod_identitys'])
+        return
+    ret_dict = args.copy()
+    del ret_dict['vod_identitys']
+    global identitys
+    for identity in args['vod_identitys']:
+        if identitys.has_key(identity) and identitys[identity].get('identity', None) and (int)(time.time()) - identitys[identity]['time'] < 300:
+            heartReturn(identitys[identity]['identity'], worker, ret_dict)
+        else:
+            tprint('worker:%s' %(multiprocessing.current_process().name), "admin commond %s" %args, "Error:client:%s is outline" %identity)
 
 def adminMsgDealHandler(worker, identity, args):
 	if not isinstance(args, dict) or not args.has_key('cmd') or not args.has_key('vod_identitys'):
@@ -208,35 +216,63 @@ def adminMsgDealHandler(worker, identity, args):
 			break
 		if case(''):
 			tprint("Error cmd", args)
-	
-def heartReturn(identity, worker, args):
-	if not isinstance(args, dict):
-		return
-	try:
-		ret_str = json.dumps(args)
-		worker.send_multipart([identity, ret_str])
-		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "ret:%s" %ret_str)
-	except Exception, e:
-		tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "Error:heartDealHandler %s" %e)
 
-def clientVerify(identity, worker):
-	sqlmanager = SqlManager()
-	sql = "select * from %s where hard_sn = '%s' " %(tb_tuple[0], identity)
-	result = sqlmanager.queryTable(sql = sql)
-	if result == None or len(result) == 0 :
+def heartReturn(identity, worker, args):
+    if not isinstance(args, dict):
+        return
+    try:
+        ret_str = json.dumps(args)
+        worker.send_multipart([identity, ret_str])
+        tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "ret:%s" %ret_str)
+    except Exception, e:
+        tprint('worker:%s' %(multiprocessing.current_process().name), "identity:%s" %identity, "Error:heartDealHandler %s" %e)
+
+def clientVerify(identity, worker, msg):
+    flag = False
+    if not all((identity, worker, msg)) and not isinstance(msg, dict):
+        return False
+    hard_sn = msg.get("hard_sn", None)
+    if hard_sn:
+        sqlmanager = SqlManager()
+        sql = "select * from %s where hard_sn = '%s' " %(tb_tuple[0], hard_sn)
+        result = sqlmanager.queryTable(sql = sql)
+        if result == None or len(result) == 0 :
+            flag = False
+        else:
+            flag = True
+    if flag:
+        global identitys
+        tprint("----------identitys", identitys,type(hard_sn))
+        if not identitys.has_key(hard_sn):
+            identitys.setdefault(hard_sn, dict())
+            '''
+            client = identitys[hard_sn]
+            client["identity"] = identity
+            client["time"] = (int)(time.time())
+            '''
+        elif identitys[hard_sn]["identity"] == identity or (identitys[hard_sn]["identity"] != identity and (int)(time.time()) - identitys[hard_sn]["time"] > 600):
+            pass
+            '''
+            client = identitys[hard_sn]
+            client["identity"] = identity
+            client["time"] = (int)(time.time())
+            '''
+        else:
+            flag = False
+
+    if not flag:
 		ret_dict = {'cmd':'heart_ret'}
 		ret_dict['info_code'] = '10004'
 		ret_dict['status'] = 0
 		heartReturn(identity, worker, ret_dict)
-		return False;
-	return True
-	
+		return False
+    return True
+
 def workerHandler():
 	context = zmq.Context()
 	worker = context.socket(zmq.DEALER)	
 	worker.connect("ipc://backend.ipc")
 	tprint("worker:%s pid:%x started" %(multiprocessing.current_process().name, os.getpid()))
-	global identitys
 	config_db = readConfig(config_path, 'db')
 	config_base = readConfig(config_path, 'baseconf')
 	sqlmanager = SqlManager()
@@ -244,20 +280,18 @@ def workerHandler():
 	while True:
 		identity, msg = worker.recv_multipart()
 		tprint("Worker:%s recv package from %s" %(multiprocessing.current_process().name, identity), msg)
-		identitys.setdefault(identity, dict())
-		identitys[identity][time] = (int)(time.time())
 		try:
 			msg = json.loads(msg)
 		except Exception, e:
 			tprint("Error:%s" %e)
 			continue
 		if identity[:5] != "admin":
-			if not clientVerify(identity, worker):
-				return
+			if not clientVerify(identity, worker, msg):
+				continue
 			clientMsgDealHandler(worker, identity, msg, config_base)
 		else:
 			adminMsgDealHandler(worker, identity, msg)
-			
+
 	worker.close()
 	context.term()
 
@@ -270,14 +304,14 @@ def workerStartHandler(index = None):
 		workers[index] = worker
 	else:
 		workers.append(worker)
-	print("worker is or not alive", worker.is_alive())
+	tprint("worker is or not alive", worker.is_alive())
 
 def serverStartHandler():
 	config = readConfig(config_path, 'baseconf')
 	context = zmq.Context()
 	frontend = context.socket(zmq.ROUTER)
-	frontend.bind("tcp://*:31000")
-#	frontend.bind("tcp://*:5570")
+#	frontend.bind("tcp://*:31000")
+	frontend.bind("tcp://*:5570")
 	backend = context.socket(zmq.DEALER)
 	backend.bind("ipc://backend.ipc")
 	tprint("server started")
@@ -302,6 +336,6 @@ def main():
 		for worker in workers:
 			if not worker.is_alive():
 				workerStartHandler(workers.index(worker))
-	
+
 if __name__ == '__main__':
 	main()
